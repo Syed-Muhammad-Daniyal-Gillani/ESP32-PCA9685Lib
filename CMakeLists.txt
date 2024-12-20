@@ -5,3 +5,5 @@
 cmake_minimum_required(VERSION 3.16)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(Robotic_hand)
+
+set(COMPONENT_REQUIRES esp_wifi)

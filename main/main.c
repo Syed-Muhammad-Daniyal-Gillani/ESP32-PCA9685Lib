@@ -1,7 +1,11 @@
 #include <stdio.h>
 #include "driver/i2c.h"
 #include "esp_log.h"
-
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
 // PCA9685 I2C address and parameters
 #define I2C_MASTER_NUM I2C_NUM_0
 #define I2C_MASTER_SDA_IO 21
@@ -14,6 +18,10 @@
 #define SERVO_MAX 600
 #define CHANNEL_0 0
 
+#define Desk_SSID "Darkness"
+#define Desk_PASS "Darkness"
+
+#define WIFI_TAG "WIFI_STATION"
 static const char *TAG = "PCA9685_SERVO";
 
 void i2c_master_init() {
@@ -27,6 +35,48 @@ void i2c_master_init() {
     };
     i2c_param_config(I2C_MASTER_NUM, &conf);
     i2c_driver_install(I2C_MASTER_NUM, conf.mode, 0, 0, 0);
+}
+
+// Event handler for Wi-Fi events
+static void wifi_event_handler(void *arg, esp_event_base_t event_base,
+                               int32_t event_id, void *event_data) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        ESP_LOGI(WIFI_TAG, "Disconnected. Retrying...");
+        esp_wifi_connect();
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+        ESP_LOGI(WIFI_TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+    }
+}
+
+void wifi_init()
+{
+    nvs_flash_init();
+    esp_netif_init();
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_sta();
+
+    wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
+    esp_wifi_init(&wifi_init_config);
+
+    // Register event handlers
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                                        &wifi_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                                        &wifi_event_handler, NULL, NULL));
+
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = Desk_SSID,
+            .password = Desk_PASS
+        },
+    };
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
+    ESP_ERROR_CHECK(esp_wifi_start() );
+    ESP_LOGI(TAG, "wifi_init_sta finished.");
 }
 
 void pca9685_write_byte(uint8_t reg, uint8_t data) {
@@ -58,7 +108,7 @@ void app_main() {
     
     ESP_LOGI(TAG, "Initializing PCA9685...");
     pca9685_init();
-
+    wifi_init();
     while (1) {
         // Sweep the servo from minimum to maximum
         for (int pulse = SERVO_MIN; pulse <= SERVO_MAX; pulse++) {
