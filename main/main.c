@@ -19,16 +19,15 @@
 #define SERVO_MAX 600
 #define CHANNEL_0 0
 
-#define Desk_SSID "ALK-WiFi"
-#define Desk_PASS ""
+#define Desk_SSID "university"
+#define Desk_PASS "bokuniversityofpeshawar"
 
 #define WIFI_TAG "WIFI_STATION"
 #define MQTT_TAG "MQTT_CLIENT"
-#define MQTT_BROKER_URI "mqtt://broker.hivemq.com"  // Replace with your MQTT broker URI
-#define MQTT_TOPIC "test/topic"                    // Replace with your topic
+#define MQTT_BROKER_URI "mqtt://mqtt.eclipseprojects.io"  // Replace with your MQTT broker URI
+#define MQTT_TOPIC "test/topic/servo"                    // Replace with your topic
 #define MQTT_MESSAGE "Hello from ESP32!"
 
-static esp_mqtt_client_handle_t client = NULL;  // MQTT client handle
 static const char *TAG = "PCA9685_SERVO";
 
 void i2c_master_init() {
@@ -58,7 +57,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
     }
 }
 
-void wifi_init()
+void wifi_init_connect()
 {
     nvs_flash_init();
     esp_netif_init();
@@ -86,73 +85,6 @@ void wifi_init()
     ESP_LOGI(TAG, "wifi_init_sta finished.");
 }
 
-
-// MQTT event handler
-static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
-    esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
-
-    switch (event_id) {
-        case MQTT_EVENT_CONNECTED:
-            ESP_LOGI(MQTT_TAG, "Connected to MQTT broker");
-            // Subscribe to a topic
-            esp_mqtt_client_subscribe(client, MQTT_TOPIC, 0);
-            // Publish a message
-            esp_mqtt_client_publish(client, MQTT_TOPIC, MQTT_MESSAGE, 0, 1, 0);
-            break;
-
-        case MQTT_EVENT_DISCONNECTED:
-            ESP_LOGI(MQTT_TAG, "Disconnected from MQTT broker");
-            break;
-
-        case MQTT_EVENT_SUBSCRIBED:
-            if (event->topic != NULL) {
-                ESP_LOGI(MQTT_TAG, "Subscribed to topic: %s", event->topic);
-            }
-            break;
-
-        case MQTT_EVENT_UNSUBSCRIBED:
-            ESP_LOGI(MQTT_TAG, "Unsubscribed from topic");
-            break;
-
-        case MQTT_EVENT_PUBLISHED:
-            ESP_LOGI(MQTT_TAG, "Message published");
-            break;
-
-        case MQTT_EVENT_DATA:
-            ESP_LOGI(MQTT_TAG, "Received data: %.*s", event->data_len, event->data);
-            break;
-
-        case MQTT_EVENT_ERROR:
-            ESP_LOGI(MQTT_TAG, "MQTT event error");
-            break;
-
-        default:
-            // ESP_LOGI(MQTT_TAG, "Other MQTT event: %c", event_id);
-            break;
-    }
-}
-
-// MQTT initialization and connection function
-void mqtt_init_and_connect() {
-    esp_mqtt_client_config_t mqtt_cfg = {
-        .broker.address.uri = "mqtt://mqtt.eclipseprojects.io",  // MQTT broker URI
-    };
-
-    // Initialize the MQTT client
-    client = esp_mqtt_client_init(&mqtt_cfg);
-    if (client == NULL) {
-        ESP_LOGE(MQTT_TAG, "Failed to initialize MQTT client");
-        return;
-    }
-
-    // Register the event handler
-    esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
-
-    // Start the MQTT client
-    esp_mqtt_client_start(client);
-    ESP_LOGI(MQTT_TAG, "MQTT client started");
-}
-
 void pca9685_write_byte(uint8_t reg, uint8_t data) {
     uint8_t write_buf[2] = {reg, data};
     i2c_master_write_to_device(I2C_MASTER_NUM, PCA9685_ADDR, write_buf, 2, 1000 / portTICK_PERIOD_MS);
@@ -176,25 +108,94 @@ void pca9685_init() {
     pca9685_write_byte(PCA9685_MODE1, 0xA0);  // Restart and set to normal mode
 }
 
+void move_servo(uint16_t start, uint16_t end) {
+    if (start < end) {
+        for (int pulse = start; pulse <= end; pulse++) {
+            pca9685_set_pwm(CHANNEL_0, 0, pulse);
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+        }
+    } else {
+        for (int pulse = start; pulse >= end; pulse--) {
+            pca9685_set_pwm(CHANNEL_0, 0, pulse);
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+        }
+    }
+}
+
+
+static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
+{
+    ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%" PRIi32 "", base, event_id);
+    esp_mqtt_event_handle_t event = event_data;
+    esp_mqtt_client_handle_t client = event->client;
+    int msg_id;
+    switch ((esp_mqtt_event_id_t)event_id) {
+    case MQTT_EVENT_CONNECTED:
+        ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
+        // msg_id = esp_mqtt_client_publish(client, "/topic/qos1", "data_3", 0, 1, 0);
+        // ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+
+        msg_id = esp_mqtt_client_subscribe(client, "servo/ser1", 1);
+
+        msg_id = esp_mqtt_client_subscribe(client, "servo/ser2", 1);
+
+        // msg_id = esp_mqtt_client_unsubscribe(client, "/topic/qos1");
+        // ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
+        break;
+    case MQTT_EVENT_DISCONNECTED:
+        ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+        break;
+
+    case MQTT_EVENT_SUBSCRIBED:
+        ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
+        break;
+    case MQTT_EVENT_UNSUBSCRIBED:
+        ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
+        break;
+    case MQTT_EVENT_PUBLISHED:
+        ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
+        break;
+    case MQTT_EVENT_DATA:
+        ESP_LOGI(TAG, "MQTT_EVENT_DATA");
+        printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
+        printf("DATA=%.*s\r\n", event->data_len, event->data);
+
+        if (strncmp(event->data, "0", event->data_len) == 0) {
+            move_servo(SERVO_MIN, SERVO_MAX);
+            ESP_LOGE(TAG, "Moving servo");
+        } else if (strncmp(event->data, "1", event->data_len) == 0) {
+            move_servo(SERVO_MAX, SERVO_MIN);
+            ESP_LOGE(TAG, "Moving servo");
+        }
+        break;
+    case MQTT_EVENT_ERROR:
+        ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
+        break;
+    default:
+        ESP_LOGI(TAG, "Other event id:%d", event->event_id);
+        break;
+    }
+}
+
+// MQTT initialization and connection function
+void mqtt_init_and_connect() {
+    esp_mqtt_client_config_t mqtt_cfg = {
+        .broker.address.uri = "mqtt://mqtt.eclipseprojects.io",  // MQTT broker URI
+    };
+
+    esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
+    esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
+    esp_mqtt_client_start(client);
+    ESP_LOGI(MQTT_TAG, "MQTT client started");
+}
+
 void app_main() {
     ESP_LOGI(TAG, "Initializing I2C...");
     i2c_master_init();
     
     ESP_LOGI(TAG, "Initializing PCA9685...");
     pca9685_init();
-    wifi_init();
+    wifi_init_connect();
     mqtt_init_and_connect();
-    while (1) {
-        // Sweep the servo from minimum to maximum
-        for (int pulse = SERVO_MIN; pulse <= SERVO_MAX; pulse++) {
-            pca9685_set_pwm(CHANNEL_0, 0, pulse);
-            // vTaskDelay(10 / portTICK_PERIOD_MS);
-        }
 
-        // Sweep the servo back from maximum to minimum
-        for (int pulse = SERVO_MAX; pulse >= SERVO_MIN; pulse--) {
-            pca9685_set_pwm(CHANNEL_0, 0, pulse);
-            vTaskDelay(10 / portTICK_PERIOD_MS);
-        }
-    }
 }
