@@ -17,7 +17,7 @@
 #define PCA9685_PRESCALE 0xFE
 #define SERVO_MIN 150
 #define SERVO_MAX 600
-#define CHANNEL_0 0
+#define CHANNEL_ID 0
 
 #define Desk_SSID "university"
 #define Desk_PASS "bokuniversityofpeshawar"
@@ -108,15 +108,15 @@ void pca9685_init() {
     pca9685_write_byte(PCA9685_MODE1, 0xA0);  // Restart and set to normal mode
 }
 
-void move_servo(uint16_t start, uint16_t end) {
+void move_servo(uint16_t channel_id,uint16_t start, uint16_t end) {
     if (start < end) {
         for (int pulse = start; pulse <= end; pulse++) {
-            pca9685_set_pwm(CHANNEL_0, 0, pulse);
+            pca9685_set_pwm(channel_id, 0, pulse);
             vTaskDelay(10 / portTICK_PERIOD_MS);
         }
     } else {
         for (int pulse = start; pulse >= end; pulse--) {
-            pca9685_set_pwm(CHANNEL_0, 0, pulse);
+            pca9685_set_pwm(channel_id, 0, pulse);
             vTaskDelay(10 / portTICK_PERIOD_MS);
         }
     }
@@ -125,6 +125,7 @@ void move_servo(uint16_t start, uint16_t end) {
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
+    uint16_t channel_id = 0;
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%" PRIi32 "", base, event_id);
     esp_mqtt_event_handle_t event = event_data;
     esp_mqtt_client_handle_t client = event->client;
@@ -135,9 +136,9 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         // msg_id = esp_mqtt_client_publish(client, "/topic/qos1", "data_3", 0, 1, 0);
         // ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 
-        msg_id = esp_mqtt_client_subscribe(client, "servo/ser1", 1);
-
-        msg_id = esp_mqtt_client_subscribe(client, "servo/ser2", 1);
+        msg_id = esp_mqtt_client_subscribe(client, "servo/serv0", 1);
+        msg_id = esp_mqtt_client_subscribe(client, "servo/serv1", 1);
+        msg_id = esp_mqtt_client_subscribe(client, "servo/serv2", 1);
 
         // msg_id = esp_mqtt_client_unsubscribe(client, "/topic/qos1");
         // ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
@@ -159,12 +160,35 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "MQTT_EVENT_DATA");
         printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
         printf("DATA=%.*s\r\n", event->data_len, event->data);
+        if(strncmp(event->topic, "servo/serv0", event->topic_len) == 0)
+        {
+            ESP_LOGW("PCA_Ctrl", "Servo 0 selected");
+            channel_id = 0;
+            
+        }
+        else if(strncmp(event->topic, "servo/serv1", event->topic_len) == 0)
+        {
+            ESP_LOGW("PCA_Ctrl", "Servo 1 selected");
+            channel_id = 1;
 
+        } 
+        else if(strncmp(event->topic, "servo/serv2", event->topic_len) == 0)
+        {
+            ESP_LOGW("PCA_Ctrl", "Servo 2 selected");
+            channel_id = 2;
+
+        }        
+        else
+        {
+            ESP_LOGE("PCA_Ctrl", "All Servo selected");
+            channel_id = 3;
+
+        }
         if (strncmp(event->data, "0", event->data_len) == 0) {
-            move_servo(SERVO_MIN, SERVO_MAX);
+            move_servo(channel_id,SERVO_MIN, SERVO_MAX);
             ESP_LOGE(TAG, "Moving servo");
         } else if (strncmp(event->data, "1", event->data_len) == 0) {
-            move_servo(SERVO_MAX, SERVO_MIN);
+            move_servo(channel_id, SERVO_MAX, SERVO_MIN);
             ESP_LOGE(TAG, "Moving servo");
         }
         break;
