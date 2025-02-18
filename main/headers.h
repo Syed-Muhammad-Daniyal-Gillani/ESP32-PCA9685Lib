@@ -8,3 +8,4 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "mqtt_client.h"
+#include <string.h>

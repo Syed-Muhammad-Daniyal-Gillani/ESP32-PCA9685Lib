@@ -2,7 +2,7 @@
 #include "headers.h"
 #include "pca9685_servo.h"
 #define SERVO_MIN 150
-#define SERVO_MAX 600
+#define SERVO_MAX 900
 #define MQTT_TAG "MQTT_CLIENT"
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
@@ -64,7 +64,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         {
             ESP_LOGE("PCA_Ctrl", "All Servo selected");
             channel_id = 3;
-
         }
         if (strncmp(event->data, "0", event->data_len) == 0) {
             move_servo(channel_id,SERVO_MIN, SERVO_MAX);

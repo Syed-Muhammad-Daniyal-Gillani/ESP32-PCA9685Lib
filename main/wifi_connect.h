@@ -7,8 +7,8 @@
 #include "headers.h"
 // Event handler for Wi-Fi events
 
-#define Desk_SSID "university"
-#define Desk_PASS "bokuniversityofpeshawar"
+#define Desk_SSID "Xperia 1 Mark 3"
+#define Desk_PASS "dani8889"
 
 #define WIFI_TAG "WIFI_STATION"
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,

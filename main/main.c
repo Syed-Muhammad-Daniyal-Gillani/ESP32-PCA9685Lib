@@ -11,6 +11,7 @@
 #include "headers.h"
 #include "ros_mqtt.h"
 #include "pca9685_servo.h"
+#include "serial_com.h"
 
 // PCA9685 I2C address and parameters
 // #define I2C_MASTER_NUM I2C_NUM_0
@@ -225,5 +226,6 @@ void app_main() {
     pca9685_init();
     wifi_init_connect();
     mqtt_init_and_connect();
+    serial_init();
 
 }
