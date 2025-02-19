@@ -1,5 +1,3 @@
-// #include <stdio.h>
-// #include "driver/i2c.h"
 #pragma once
 #include "headers.h"
 #define I2C_MASTER_NUM I2C_NUM_0
