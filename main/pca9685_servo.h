@@ -1,5 +1,3 @@
-// #include <stdio.h>
-// #include "driver/i2c.h"
 #pragma once
 #include "headers.h"
 #define I2C_MASTER_NUM I2C_NUM_0
@@ -53,12 +51,12 @@ void move_servo(uint16_t channel_id,uint16_t start, uint16_t end) {
     if (start < end) {
         for (int pulse = start; pulse <= end; pulse++) {
             pca9685_set_pwm(channel_id, 0, pulse);
-            vTaskDelay(10 / portTICK_PERIOD_MS);
+            vTaskDelay(3 / portTICK_PERIOD_MS);
         }
     } else {
         for (int pulse = start; pulse >= end; pulse--) {
             pca9685_set_pwm(channel_id, 0, pulse);
-            vTaskDelay(10 / portTICK_PERIOD_MS);
+            vTaskDelay(3 / portTICK_PERIOD_MS);
         }
     }
 }
